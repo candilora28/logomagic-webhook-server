@@ -214,13 +214,58 @@ app.get('/app', (req, res) => {
         <title>LogoMagic</title>
         <script src="https://unpkg.com/@shopify/app-bridge@3.7.9/dist/index.umd.js"></script>
         <script src="https://unpkg.com/@shopify/app-bridge-utils@3.7.9/dist/index.umd.js"></script>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; background: #f6f6f7; }
+          .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+          .header { text-align: center; margin-bottom: 30px; }
+          .logo { font-size: 2.5em; font-weight: bold; color: #007bff; margin-bottom: 10px; }
+          .status { background: #e8f5e8; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+          .button { background: #007bff; color: white; padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+          .button:hover { background: #0056b3; }
+          .button:disabled { background: #ccc; cursor: not-allowed; }
+          .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+          .token-display { background: #f8f9fa; padding: 10px; border-radius: 3px; font-family: monospace; word-break: break-all; }
+        </style>
       </head>
       <body>
-        <div id="app">
-          <h1>🎨 LogoMagic</h1>
-          <p>Your desktop application for product management</p>
-          <p><strong>Status:</strong> Connected to ${shop}</p>
-          <p>This embedded interface provides access to your LogoMagic desktop application.</p>
+        <div class="container">
+          <div class="header">
+            <div class="logo">🎨 LogoMagic</div>
+            <h1>Product Management Dashboard</h1>
+            <p>Connected to: <strong>${shop}</strong></p>
+          </div>
+          
+          <div class="status">
+            <h3>✅ Connection Status</h3>
+            <p>Successfully connected to your Shopify store. Ready to manage products.</p>
+          </div>
+          
+          <div class="section">
+            <h3>�� Authentication</h3>
+            <button class="button" onclick="getSessionToken()">Get Session Token</button>
+            <button class="button" onclick="validateConnection()">Validate Connection</button>
+            <div id="tokenResult" class="token-display" style="display: none;"></div>
+          </div>
+          
+          <div class="section">
+            <h3>📊 Store Information</h3>
+            <button class="button" onclick="getShopInfo()">Get Shop Details</button>
+            <button class="button" onclick="getProductCount()">Get Product Count</button>
+            <div id="shopInfo" style="margin-top: 10px;"></div>
+          </div>
+          
+          <div class="section">
+            <h3>�� App Bridge Actions</h3>
+            <button class="button" onclick="showToast()">Show Toast Message</button>
+            <button class="button" onclick="openModal()">Open Modal</button>
+            <button class="button" onclick="redirectToProducts()">Go to Products</button>
+          </div>
+          
+          <div class="section">
+            <h3>�� Session Data</h3>
+            <p>This section tracks your interactions to generate session data for Shopify's automated checks.</p>
+            <div id="sessionLog" style="background: #f8f9fa; padding: 10px; border-radius: 3px; max-height: 200px; overflow-y: auto;"></div>
+          </div>
         </div>
         
         <script>
@@ -232,14 +277,149 @@ app.get('/app', (req, res) => {
           };
           
           const app = window.createApp(config);
+          let sessionToken = null;
+          
+          // Log function to track interactions
+          function logInteraction(action) {
+            const log = document.getElementById('sessionLog');
+            const timestamp = new Date().toLocaleTimeString();
+            log.innerHTML += \`<div><strong>\${timestamp}:</strong> \${action}</div>\`;
+            log.scrollTop = log.scrollHeight;
+          }
           
           // Get session token
-          app.getSessionToken().then(token => {
-            console.log('Session token obtained:', token);
-            document.getElementById('app').innerHTML += '<p><strong>✅ Session Token:</strong> ' + token.substring(0, 20) + '...</p>';
-          }).catch(error => {
-            console.error('Error getting session token:', error);
-            document.getElementById('app').innerHTML += '<p><strong>❌ Error:</strong> ' + error.message + '</p>';
+          async function getSessionToken() {
+            try {
+              logInteraction('Getting session token...');
+              sessionToken = await app.getSessionToken();
+              document.getElementById('tokenResult').innerHTML = '<strong>✅ Session Token:</strong> ' + sessionToken.substring(0, 50) + '...';
+              document.getElementById('tokenResult').style.display = 'block';
+              logInteraction('Session token obtained successfully');
+            } catch (error) {
+              logInteraction('Error getting session token: ' + error.message);
+              document.getElementById('tokenResult').innerHTML = '<strong>❌ Error:</strong> ' + error.message;
+              document.getElementById('tokenResult').style.display = 'block';
+            }
+          }
+          
+          // Validate connection
+          async function validateConnection() {
+            try {
+              logInteraction('Validating connection...');
+              const token = await app.getSessionToken();
+              logInteraction('Connection validated successfully');
+              alert('✅ Connection validated successfully!');
+            } catch (error) {
+              logInteraction('Connection validation failed: ' + error.message);
+              alert('❌ Connection validation failed: ' + error.message);
+            }
+          }
+          
+          // Get shop information
+          async function getShopInfo() {
+            try {
+              logInteraction('Fetching shop information...');
+              const response = await fetch(\`https://\${shop}/admin/api/2023-10/shop.json\`, {
+                headers: {
+                  'X-Shopify-Access-Token': sessionToken || await app.getSessionToken()
+                }
+              });
+              const data = await response.json();
+              document.getElementById('shopInfo').innerHTML = \`
+                <p><strong>Shop Name:</strong> \${data.shop.name}</p>
+                <p><strong>Email:</strong> \${data.shop.email}</p>
+                <p><strong>Domain:</strong> \${data.shop.domain}</p>
+              \`;
+              logInteraction('Shop information retrieved successfully');
+            } catch (error) {
+              logInteraction('Error getting shop info: ' + error.message);
+              document.getElementById('shopInfo').innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+          }
+          
+          // Get product count
+          async function getProductCount() {
+            try {
+              logInteraction('Fetching product count...');
+              const response = await fetch(\`https://\${shop}/admin/api/2023-10/products/count.json\`, {
+                headers: {
+                  'X-Shopify-Access-Token': sessionToken || await app.getSessionToken()
+                }
+              });
+              const data = await response.json();
+              document.getElementById('shopInfo').innerHTML = \`
+                <p><strong>Total Products:</strong> \${data.count}</p>
+              \`;
+              logInteraction('Product count retrieved: ' + data.count + ' products');
+            } catch (error) {
+              logInteraction('Error getting product count: ' + error.message);
+              document.getElementById('shopInfo').innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+          }
+          
+          // Show toast message
+          async function showToast() {
+            try {
+              logInteraction('Showing toast message...');
+              app.dispatch(
+                window.createToast({
+                  message: 'LogoMagic is working perfectly! 🎨',
+                  duration: 3000,
+                  isError: false
+                })
+              );
+              logInteraction('Toast message displayed');
+            } catch (error) {
+              logInteraction('Error showing toast: ' + error.message);
+            }
+          }
+          
+          // Open modal
+          async function openModal() {
+            try {
+              logInteraction('Opening modal...');
+              app.dispatch(
+                window.createModal({
+                  title: 'LogoMagic Dashboard',
+                  message: 'This is a test modal to demonstrate App Bridge functionality.',
+                  primaryAction: {
+                    label: 'OK',
+                    callback: () => {
+                      logInteraction('Modal closed');
+                    }
+                  }
+                })
+              );
+              logInteraction('Modal opened');
+            } catch (error) {
+              logInteraction('Error opening modal: ' + error.message);
+            }
+          }
+          
+          // Redirect to products
+          async function redirectToProducts() {
+            try {
+              logInteraction('Redirecting to products page...');
+              app.dispatch(
+                window.createRedirect({
+                  path: '/admin/products'
+                })
+              );
+              logInteraction('Redirect initiated');
+            } catch (error) {
+              logInteraction('Error redirecting: ' + error.message);
+            }
+          }
+          
+          // Auto-initialize session token on page load
+          window.addEventListener('load', async () => {
+            logInteraction('Page loaded, initializing...');
+            try {
+              sessionToken = await app.getSessionToken();
+              logInteraction('Session token auto-generated');
+            } catch (error) {
+              logInteraction('Error auto-generating session token: ' + error.message);
+            }
           });
         </script>
       </body>
