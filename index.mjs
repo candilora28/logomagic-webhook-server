@@ -112,7 +112,7 @@ app.get('/auth', (req, res) => {
 
 app.get('/auth/callback', async (req, res) => {
   try {
-    const { code, state, shop } = req.query;
+    const { code, state, shop, host } = req.query;
     
     console.log('🔄 Processing OAuth callback for shop:', shop);
     
@@ -133,36 +133,11 @@ app.get('/auth/callback', async (req, res) => {
     
     console.log('✅ Shopify Auth Successful! Access token received for:', shop);
     
-    // Success page
-    res.send(`
-      <html>
-        <head>
-          <title>Authentication Successful - LogoMagic</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f0f2f5; }
-            .container { max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-            .success { color: #28a745; font-size: 4em; margin-bottom: 20px; }
-            h1 { color: #333; margin-bottom: 20px; }
-            p { color: #666; line-height: 1.6; margin-bottom: 15px; }
-            .shop-name { font-weight: bold; color: #007bff; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="success">✅</div>
-            <h1>Authentication Successful!</h1>
-            <p>Your store <span class="shop-name">${shop}</span> has been connected to LogoMagic.</p>
-            <p><strong>You can now close this window</strong> and return to the LogoMagic desktop app.</p>
-            <p style="margin-top: 30px; font-size: 14px; color: #999;">This window will automatically close in 3 seconds...</p>
-          </div>
-          <script>
-            setTimeout(() => {
-              window.close();
-            }, 3000);
-          </script>
-        </body>
-      </html>
-    `);
+    // Redirect to embedded app instead of showing success page
+    const appUrl = `https://logomagic-webhook-server-production.up.railway.app/app?shop=${shop}&host=${host}`;
+    console.log(`🎯 Redirecting to embedded app: ${appUrl}`);
+    
+    res.redirect(appUrl);
 
   } catch (error) {
     console.error('🛑 Shopify Auth Failed:', error);
