@@ -71,12 +71,20 @@ app.get('/', (req, res) => {
 });
 
 // Handle Shopify app installation
-// Handle Shopify app installation
 app.get('/auth', (req, res) => {
   const { shop, hmac, host, timestamp } = req.query;
   
   console.log('🔐 Received Shopify installation request:', { shop, hmac, host, timestamp });
   
+  // Check if this is a completed OAuth callback (has code parameter)
+  if (req.query.code) {
+    // This is an OAuth callback, redirect to the embedded app
+    const appUrl = `https://logomagic-webhook-server-production.up.railway.app/app?shop=${shop}&host=${host}`;
+    console.log(`🎯 OAuth completed, redirecting to embedded app: ${appUrl}`);
+    return res.redirect(appUrl);
+  }
+  
+  // This is the initial installation request
   if (!shop) {
     res.status(400).send('Missing shop parameter');
     return;
@@ -133,8 +141,8 @@ app.get('/auth/callback', async (req, res) => {
     
     console.log('✅ Shopify Auth Successful! Access token received for:', shop);
     
-    // Redirect to embedded app instead of showing success page
-    const appUrl = `https://logomagic-webhook-server-production.up.railway.app/app?shop=${shop}&host=${host}`;
+    // Redirect to embedded app with success
+    const appUrl = `https://logomagic-webhook-server-production.up.railway.app/app?shop=${shop}&host=${host}&auth=success`;
     console.log(`🎯 Redirecting to embedded app: ${appUrl}`);
     
     res.redirect(appUrl);
@@ -166,6 +174,8 @@ app.get('/auth/callback', async (req, res) => {
     `);
   }
 });
+
+
 
 // Mandatory compliance webhooks
 app.post('/webhooks/customers/data_request', (req, res) => {
