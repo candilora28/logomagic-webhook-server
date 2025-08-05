@@ -212,8 +212,6 @@ app.get('/app', (req, res) => {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>LogoMagic</title>
-        <script src="https://unpkg.com/@shopify/app-bridge@3.7.9/dist/index.umd.js"></script>
-        <script src="https://unpkg.com/@shopify/app-bridge-utils@3.7.9/dist/index.umd.js"></script>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; background: #f6f6f7; }
           .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
@@ -269,7 +267,7 @@ app.get('/app', (req, res) => {
         </div>
         
         <script>
-          // Store shop domain globally
+          // Store variables globally
           const shopDomain = '${shop}';
           const apiKey = '${SHOPIFY_API_KEY}';
           const hostParam = '${host}';
@@ -285,14 +283,42 @@ app.get('/app', (req, res) => {
             log.scrollTop = log.scrollHeight;
           }
           
+          // Load App Bridge script dynamically
+          function loadAppBridge() {
+            return new Promise((resolve, reject) => {
+              // Check if already loaded
+              if (window.createApp) {
+                resolve();
+                return;
+              }
+              
+              logInteraction('Loading App Bridge script...');
+              
+              const script = document.createElement('script');
+              script.src = 'https://unpkg.com/@shopify/app-bridge@3.7.9/dist/index.umd.js';
+              script.onload = () => {
+                logInteraction('App Bridge script loaded successfully');
+                resolve();
+              };
+              script.onerror = () => {
+                logInteraction('Failed to load App Bridge script');
+                reject(new Error('Failed to load App Bridge script'));
+              };
+              document.head.appendChild(script);
+            });
+          }
+          
           // Initialize App Bridge
-          function initializeAppBridge() {
+          async function initializeAppBridge() {
             try {
               logInteraction('Initializing App Bridge...');
               
-              // Check if App Bridge is loaded
+              // Load script if needed
+              await loadAppBridge();
+              
+              // Check if App Bridge is available
               if (typeof window.createApp === 'undefined') {
-                throw new Error('App Bridge not loaded');
+                throw new Error('App Bridge createApp function not available');
               }
               
               const config = {
@@ -316,7 +342,7 @@ app.get('/app', (req, res) => {
               logInteraction('Getting session token...');
               
               if (!app) {
-                if (!initializeAppBridge()) {
+                if (!(await initializeAppBridge())) {
                   throw new Error('App Bridge not available');
                 }
               }
@@ -338,7 +364,7 @@ app.get('/app', (req, res) => {
               logInteraction('Validating connection...');
               
               if (!app) {
-                if (!initializeAppBridge()) {
+                if (!(await initializeAppBridge())) {
                   throw new Error('App Bridge not available');
                 }
               }
@@ -420,7 +446,7 @@ app.get('/app', (req, res) => {
               logInteraction('Showing toast message...');
               
               if (!app) {
-                if (!initializeAppBridge()) {
+                if (!(await initializeAppBridge())) {
                   throw new Error('App Bridge not available');
                 }
               }
@@ -444,7 +470,7 @@ app.get('/app', (req, res) => {
               logInteraction('Opening modal...');
               
               if (!app) {
-                if (!initializeAppBridge()) {
+                if (!(await initializeAppBridge())) {
                   throw new Error('App Bridge not available');
                 }
               }
@@ -473,7 +499,7 @@ app.get('/app', (req, res) => {
               logInteraction('Redirecting to products page...');
               
               if (!app) {
-                if (!initializeAppBridge()) {
+                if (!(await initializeAppBridge())) {
                   throw new Error('App Bridge not available');
                 }
               }
@@ -492,7 +518,7 @@ app.get('/app', (req, res) => {
           // Auto-initialize on page load
           window.addEventListener('load', async () => {
             logInteraction('Page loaded, initializing...');
-            initializeAppBridge();
+            await initializeAppBridge();
           });
         </script>
       </body>
