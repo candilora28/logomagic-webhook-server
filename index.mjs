@@ -269,14 +269,12 @@ app.get('/app', (req, res) => {
         </div>
         
         <script>
-          // Initialize App Bridge
-          const config = {
-            apiKey: '${SHOPIFY_API_KEY}',
-            host: '${host}',
-            forceRedirect: true
-          };
+          // Store shop domain globally
+          const shopDomain = '${shop}';
+          const apiKey = '${SHOPIFY_API_KEY}';
+          const hostParam = '${host}';
           
-          const app = window.createApp(config);
+          let app = null;
           let sessionToken = null;
           
           // Log function to track interactions
@@ -287,10 +285,42 @@ app.get('/app', (req, res) => {
             log.scrollTop = log.scrollHeight;
           }
           
+          // Initialize App Bridge
+          function initializeAppBridge() {
+            try {
+              logInteraction('Initializing App Bridge...');
+              
+              // Check if App Bridge is loaded
+              if (typeof window.createApp === 'undefined') {
+                throw new Error('App Bridge not loaded');
+              }
+              
+              const config = {
+                apiKey: apiKey,
+                host: hostParam,
+                forceRedirect: true
+              };
+              
+              app = window.createApp(config);
+              logInteraction('App Bridge initialized successfully');
+              return true;
+            } catch (error) {
+              logInteraction('Error initializing App Bridge: ' + error.message);
+              return false;
+            }
+          }
+          
           // Get session token
           async function getSessionToken() {
             try {
               logInteraction('Getting session token...');
+              
+              if (!app) {
+                if (!initializeAppBridge()) {
+                  throw new Error('App Bridge not available');
+                }
+              }
+              
               sessionToken = await app.getSessionToken();
               document.getElementById('tokenResult').innerHTML = '<strong>✅ Session Token:</strong> ' + sessionToken.substring(0, 50) + '...';
               document.getElementById('tokenResult').style.display = 'block';
@@ -306,6 +336,13 @@ app.get('/app', (req, res) => {
           async function validateConnection() {
             try {
               logInteraction('Validating connection...');
+              
+              if (!app) {
+                if (!initializeAppBridge()) {
+                  throw new Error('App Bridge not available');
+                }
+              }
+              
               const token = await app.getSessionToken();
               logInteraction('Connection validated successfully');
               alert('✅ Connection validated successfully!');
@@ -319,11 +356,21 @@ app.get('/app', (req, res) => {
           async function getShopInfo() {
             try {
               logInteraction('Fetching shop information...');
-              const response = await fetch(\`https://\${shop}/admin/api/2023-10/shop.json\`, {
+              
+              if (!sessionToken) {
+                await getSessionToken();
+              }
+              
+              const response = await fetch(\`https://\${shopDomain}/admin/api/2023-10/shop.json\`, {
                 headers: {
-                  'X-Shopify-Access-Token': sessionToken || await app.getSessionToken()
+                  'X-Shopify-Access-Token': sessionToken
                 }
               });
+              
+              if (!response.ok) {
+                throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+              }
+              
               const data = await response.json();
               document.getElementById('shopInfo').innerHTML = \`
                 <p><strong>Shop Name:</strong> \${data.shop.name}</p>
@@ -341,11 +388,21 @@ app.get('/app', (req, res) => {
           async function getProductCount() {
             try {
               logInteraction('Fetching product count...');
-              const response = await fetch(\`https://\${shop}/admin/api/2023-10/products/count.json\`, {
+              
+              if (!sessionToken) {
+                await getSessionToken();
+              }
+              
+              const response = await fetch(\`https://\${shopDomain}/admin/api/2023-10/products/count.json\`, {
                 headers: {
-                  'X-Shopify-Access-Token': sessionToken || await app.getSessionToken()
+                  'X-Shopify-Access-Token': sessionToken
                 }
               });
+              
+              if (!response.ok) {
+                throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+              }
+              
               const data = await response.json();
               document.getElementById('shopInfo').innerHTML = \`
                 <p><strong>Total Products:</strong> \${data.count}</p>
@@ -361,6 +418,13 @@ app.get('/app', (req, res) => {
           async function showToast() {
             try {
               logInteraction('Showing toast message...');
+              
+              if (!app) {
+                if (!initializeAppBridge()) {
+                  throw new Error('App Bridge not available');
+                }
+              }
+              
               app.dispatch(
                 window.createToast({
                   message: 'LogoMagic is working perfectly! 🎨',
@@ -378,6 +442,13 @@ app.get('/app', (req, res) => {
           async function openModal() {
             try {
               logInteraction('Opening modal...');
+              
+              if (!app) {
+                if (!initializeAppBridge()) {
+                  throw new Error('App Bridge not available');
+                }
+              }
+              
               app.dispatch(
                 window.createModal({
                   title: 'LogoMagic Dashboard',
@@ -400,6 +471,13 @@ app.get('/app', (req, res) => {
           async function redirectToProducts() {
             try {
               logInteraction('Redirecting to products page...');
+              
+              if (!app) {
+                if (!initializeAppBridge()) {
+                  throw new Error('App Bridge not available');
+                }
+              }
+              
               app.dispatch(
                 window.createRedirect({
                   path: '/admin/products'
@@ -411,15 +489,10 @@ app.get('/app', (req, res) => {
             }
           }
           
-          // Auto-initialize session token on page load
+          // Auto-initialize on page load
           window.addEventListener('load', async () => {
             logInteraction('Page loaded, initializing...');
-            try {
-              sessionToken = await app.getSessionToken();
-              logInteraction('Session token auto-generated');
-            } catch (error) {
-              logInteraction('Error auto-generating session token: ' + error.message);
-            }
+            initializeAppBridge();
           });
         </script>
       </body>
