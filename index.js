@@ -1,10 +1,12 @@
 const express = require('express');
 const crypto = require('crypto');
+const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Your Shopify app credentials (replace with your actual values)
+const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY || 'your_api_key_here';
 const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || 'your_api_secret_here';
 
 // Middleware
@@ -56,6 +58,127 @@ app.get('/', (req, res) => {
       </body>
     </html>
   `);
+});
+
+// Handle Shopify app installation
+app.get('/auth', (req, res) => {
+  const { shop, hmac, host, timestamp } = req.query;
+  
+  console.log('🔐 Received Shopify installation request:', { shop, hmac, host, timestamp });
+  
+  if (!shop) {
+    res.status(400).send('Missing shop parameter');
+    return;
+  }
+  
+  try {
+    // Ensure shop is properly formatted
+    const shopDomain = shop.includes('.') ? shop : `${shop}.myshopify.com`;
+    
+    // Build the OAuth URL for Shopify's installation flow
+    const scopes = 'write_products,read_products';
+    const redirectUri = `https://logomagic-webhook-server-production.up.railway.app/auth/callback`;
+    const state = Math.random().toString(36).substring(7);
+    
+    const authUrl = `https://${shopDomain}/admin/oauth/authorize?` +
+      `client_id=${SHOPIFY_API_KEY}&` +
+      `scope=${scopes}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `state=${state}&` +
+      `response_type=code`;
+    
+    console.log(`🔐 Starting OAuth flow for shop: ${shopDomain}`);
+    console.log(`�� Redirecting to: ${authUrl}`);
+    
+    // Redirect to Shopify's OAuth authorization
+    res.redirect(authUrl);
+    
+  } catch (error) {
+    console.error('🛑 Failed to start OAuth:', error);
+    res.status(500).send('Failed to start authentication');
+  }
+});
+
+app.get('/auth/callback', async (req, res) => {
+  try {
+    const { code, state, shop } = req.query;
+    
+    console.log('🔄 Processing OAuth callback for shop:', shop);
+    
+    if (!shop) {
+      throw new Error('No shop domain found');
+    }
+    
+    console.log('🔑 Exchanging code for access token...');
+    
+    // Exchange authorization code for access token
+    const tokenResponse = await axios.post(`https://${shop}/admin/oauth/access_token`, {
+      client_id: SHOPIFY_API_KEY,
+      client_secret: SHOPIFY_API_SECRET,
+      code: code,
+    });
+    
+    const { access_token, scope } = tokenResponse.data;
+    
+    console.log('✅ Shopify Auth Successful! Access token received for:', shop);
+    
+    // Success page
+    res.send(`
+      <html>
+        <head>
+          <title>Authentication Successful - LogoMagic</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f0f2f5; }
+            .container { max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+            .success { color: #28a745; font-size: 4em; margin-bottom: 20px; }
+            h1 { color: #333; margin-bottom: 20px; }
+            p { color: #666; line-height: 1.6; margin-bottom: 15px; }
+            .shop-name { font-weight: bold; color: #007bff; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success">✅</div>
+            <h1>Authentication Successful!</h1>
+            <p>Your store <span class="shop-name">${shop}</span> has been connected to LogoMagic.</p>
+            <p><strong>You can now close this window</strong> and return to the LogoMagic desktop app.</p>
+            <p style="margin-top: 30px; font-size: 14px; color: #999;">This window will automatically close in 3 seconds...</p>
+          </div>
+          <script>
+            setTimeout(() => {
+              window.close();
+            }, 3000);
+          </script>
+        </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error('🛑 Shopify Auth Failed:', error);
+    res.status(500).send(`
+      <html>
+        <head>
+          <title>Authentication Failed - LogoMagic</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f0f2f5; }
+            .container { max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+            .error { color: #dc3545; font-size: 4em; margin-bottom: 20px; }
+            h1 { color: #333; margin-bottom: 20px; }
+            p { color: #666; line-height: 1.6; margin-bottom: 15px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="error">❌</div>
+            <h1>Authentication Failed</h1>
+            <p>There was an error connecting your store to LogoMagic.</p>
+            <p><strong>Please try again</strong> from the LogoMagic desktop app.</p>
+            <p style="margin-top: 20px; font-size: 12px; color: #999;">Error: ${error}</p>
+          </div>
+        </body>
+      </html>
+    `);
+  }
 });
 
 // Mandatory compliance webhooks
@@ -148,7 +271,8 @@ app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    webhooks: ['customers/data_request', 'customers/redact', 'shop/redact', 'app/uninstalled']
+    webhooks: ['customers/data_request', 'customers/redact', 'shop/redact', 'app/uninstalled'],
+    oauth: ['/auth', '/auth/callback']
   });
 });
 
@@ -159,4 +283,7 @@ app.listen(PORT, () => {
   console.log(`   → https://your-domain.com/webhooks/customers/redact`);
   console.log(`   → https://your-domain.com/webhooks/shop/redact`);
   console.log(`   → https://your-domain.com/webhooks/app/uninstalled`);
+  console.log(`✅ OAuth endpoints available:`);
+  console.log(`   → https://your-domain.com/auth`);
+  console.log(`   → https://your-domain.com/auth/callback`);
 });
