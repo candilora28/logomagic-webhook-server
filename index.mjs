@@ -35,6 +35,16 @@ function verifyShopifyWebhook(req, secret) {
 
 // Landing page
 app.get('/', (req, res) => {
+  // Check if this is a Shopify installation request
+  const { shop, hmac, host, timestamp } = req.query;
+  
+  if (shop && hmac && host && timestamp) {
+    // This is a Shopify installation request, redirect to /auth
+    console.log('🔐 Shopify installation request detected, redirecting to /auth');
+    return res.redirect(`/auth?${new URLSearchParams(req.query).toString()}`);
+  }
+  
+  // Regular landing page
   res.send(`
     <html>
       <head>
@@ -60,6 +70,7 @@ app.get('/', (req, res) => {
   `);
 });
 
+// Handle Shopify app installation
 // Handle Shopify app installation
 app.get('/auth', (req, res) => {
   const { shop, hmac, host, timestamp } = req.query;
@@ -88,7 +99,7 @@ app.get('/auth', (req, res) => {
       `response_type=code`;
     
     console.log(`🔐 Starting OAuth flow for shop: ${shopDomain}`);
-    console.log(`�� Redirecting to: ${authUrl}`);
+    console.log(` Redirecting to: ${authUrl}`);
     
     // Redirect to Shopify's OAuth authorization
     res.redirect(authUrl);
