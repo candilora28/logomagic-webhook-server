@@ -214,6 +214,64 @@ app.post('/webhooks/customers/data_request', (req, res) => {
   }
 });
 
+// Add this after your existing endpoints
+
+// Serve App Bridge script
+app.get('/app-bridge.js', (req, res) => {
+  res.redirect('https://unpkg.com/@shopify/app-bridge@3.7.9/dist/index.umd.js');
+});
+
+// Embedded app interface
+app.get('/app', (req, res) => {
+  const { shop, host } = req.query;
+  
+  if (!shop || !host) {
+    res.status(400).send('Missing shop or host parameter');
+    return;
+  }
+  
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>LogoMagic</title>
+        <script src="https://unpkg.com/@shopify/app-bridge@3.7.9/dist/index.umd.js"></script>
+        <script src="https://unpkg.com/@shopify/app-bridge-utils@3.7.9/dist/index.umd.js"></script>
+      </head>
+      <body>
+        <div id="app">
+          <h1>🎨 LogoMagic</h1>
+          <p>Your desktop application for product management</p>
+          <p><strong>Status:</strong> Connected to ${shop}</p>
+          <p>This embedded interface provides access to your LogoMagic desktop application.</p>
+        </div>
+        
+        <script>
+          // Initialize App Bridge
+          const config = {
+            apiKey: '${SHOPIFY_API_KEY}',
+            host: '${host}',
+            forceRedirect: true
+          };
+          
+          const app = window.createApp(config);
+          
+          // Get session token
+          app.getSessionToken().then(token => {
+            console.log('Session token obtained:', token);
+            document.getElementById('app').innerHTML += '<p><strong>✅ Session Token:</strong> ' + token.substring(0, 20) + '...</p>';
+          }).catch(error => {
+            console.error('Error getting session token:', error);
+            document.getElementById('app').innerHTML += '<p><strong>❌ Error:</strong> ' + error.message + '</p>';
+          });
+        </script>
+      </body>
+    </html>
+  `);
+});
+
 app.post('/webhooks/customers/redact', (req, res) => {
   console.log('🗑️ Received customers/redact webhook');
   
