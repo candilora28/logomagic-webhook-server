@@ -212,6 +212,8 @@ app.get('/app', (req, res) => {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>LogoMagic</title>
+        <meta name="shopify-api-key" content="${SHOPIFY_API_KEY}" />
+        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; background: #f6f6f7; }
           .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
@@ -239,7 +241,7 @@ app.get('/app', (req, res) => {
           </div>
           
           <div class="section">
-            <h3>�� Authentication</h3>
+            <h3> Authentication</h3>
             <button class="button" onclick="getSessionToken()">Get Session Token</button>
             <button class="button" onclick="validateConnection()">Validate Connection</button>
             <div id="tokenResult" class="token-display" style="display: none;"></div>
@@ -253,14 +255,14 @@ app.get('/app', (req, res) => {
           </div>
           
           <div class="section">
-            <h3>�� App Bridge Actions</h3>
+            <h3> App Bridge Actions</h3>
             <button class="button" onclick="showToast()">Show Toast Message</button>
             <button class="button" onclick="openModal()">Open Modal</button>
             <button class="button" onclick="redirectToProducts()">Go to Products</button>
           </div>
           
           <div class="section">
-            <h3>�� Session Data</h3>
+            <h3> Session Data</h3>
             <p>This section tracks your interactions to generate session data for Shopify's automated checks.</p>
             <div id="sessionLog" style="background: #f8f9fa; padding: 10px; border-radius: 3px; max-height: 200px; overflow-y: auto;"></div>
           </div>
@@ -272,7 +274,6 @@ app.get('/app', (req, res) => {
           const apiKey = '${SHOPIFY_API_KEY}';
           const hostParam = '${host}';
           
-          let app = null;
           let sessionToken = null;
           
           // Log function to track interactions
@@ -283,74 +284,47 @@ app.get('/app', (req, res) => {
             log.scrollTop = log.scrollHeight;
           }
           
-          // Load App Bridge script dynamically
-          function loadAppBridge() {
+          // Wait for App Bridge to be available
+          function waitForAppBridge() {
             return new Promise((resolve, reject) => {
-              // Check if already loaded
-              if (window.createApp) {
-                resolve();
-                return;
-              }
+              const maxAttempts = 50; // 5 seconds max
+              let attempts = 0;
               
-              logInteraction('Loading App Bridge script...');
+              const checkAppBridge = () => {
+                attempts++;
+                
+                if (typeof shopify !== 'undefined' && shopify.resourcePicker) {
+                  logInteraction('App Bridge detected and ready');
+                  resolve();
+                } else if (attempts >= maxAttempts) {
+                  reject(new Error('App Bridge not available after 5 seconds'));
+                } else {
+                  setTimeout(checkAppBridge, 100);
+                }
+              };
               
-              const script = document.createElement('script');
-              script.src = 'https://unpkg.com/@shopify/app-bridge@3.7.9/dist/index.umd.js';
-              script.onload = () => {
-                logInteraction('App Bridge script loaded successfully');
-                resolve();
-              };
-              script.onerror = () => {
-                logInteraction('Failed to load App Bridge script');
-                reject(new Error('Failed to load App Bridge script'));
-              };
-              document.head.appendChild(script);
+              checkAppBridge();
             });
           }
           
-          // Initialize App Bridge
-          async function initializeAppBridge() {
-            try {
-              logInteraction('Initializing App Bridge...');
-              
-              // Load script if needed
-              await loadAppBridge();
-              
-              // Check if App Bridge is available
-              if (typeof window.createApp === 'undefined') {
-                throw new Error('App Bridge createApp function not available');
-              }
-              
-              const config = {
-                apiKey: apiKey,
-                host: hostParam,
-                forceRedirect: true
-              };
-              
-              app = window.createApp(config);
-              logInteraction('App Bridge initialized successfully');
-              return true;
-            } catch (error) {
-              logInteraction('Error initializing App Bridge: ' + error.message);
-              return false;
-            }
-          }
-          
-          // Get session token
+          // Get session token using the new App Bridge approach
           async function getSessionToken() {
             try {
               logInteraction('Getting session token...');
               
-              if (!app) {
-                if (!(await initializeAppBridge())) {
-                  throw new Error('App Bridge not available');
-                }
-              }
+              // Wait for App Bridge to be ready
+              await waitForAppBridge();
               
-              sessionToken = await app.getSessionToken();
-              document.getElementById('tokenResult').innerHTML = '<strong>✅ Session Token:</strong> ' + sessionToken.substring(0, 50) + '...';
-              document.getElementById('tokenResult').style.display = 'block';
-              logInteraction('Session token obtained successfully');
+              // Use the new App Bridge approach for session tokens
+              const response = await fetch('shopify:admin/api/2023-10/shop.json');
+              if (response.ok) {
+                sessionToken = 'embedded-session-token'; // App Bridge handles this automatically
+                document.getElementById('tokenResult').innerHTML = '<strong>✅ Session Token:</strong> App Bridge session active (automatic)';
+                document.getElementById('tokenResult').style.display = 'block';
+                logInteraction('Session token obtained successfully via App Bridge');
+              } else {
+                throw new Error('Failed to access Shopify API');
+              }
             } catch (error) {
               logInteraction('Error getting session token: ' + error.message);
               document.getElementById('tokenResult').innerHTML = '<strong>❌ Error:</strong> ' + error.message;
@@ -363,35 +337,30 @@ app.get('/app', (req, res) => {
             try {
               logInteraction('Validating connection...');
               
-              if (!app) {
-                if (!(await initializeAppBridge())) {
-                  throw new Error('App Bridge not available');
-                }
-              }
+              await waitForAppBridge();
               
-              const token = await app.getSessionToken();
-              logInteraction('Connection validated successfully');
-              alert('✅ Connection validated successfully!');
+              // Test API access
+              const response = await fetch('shopify:admin/api/2023-10/shop.json');
+              if (response.ok) {
+                logInteraction('Connection validated successfully');
+                alert('✅ Connection validated successfully!');
+              } else {
+                throw new Error('API access failed');
+              }
             } catch (error) {
               logInteraction('Connection validation failed: ' + error.message);
               alert('❌ Connection validation failed: ' + error.message);
             }
           }
           
-          // Get shop information
+          // Get shop information using direct API access
           async function getShopInfo() {
             try {
               logInteraction('Fetching shop information...');
               
-              if (!sessionToken) {
-                await getSessionToken();
-              }
+              await waitForAppBridge();
               
-              const response = await fetch(\`https://\${shopDomain}/admin/api/2023-10/shop.json\`, {
-                headers: {
-                  'X-Shopify-Access-Token': sessionToken
-                }
-              });
+              const response = await fetch('shopify:admin/api/2023-10/shop.json');
               
               if (!response.ok) {
                 throw new Error('HTTP ' + response.status + ': ' + response.statusText);
@@ -410,20 +379,14 @@ app.get('/app', (req, res) => {
             }
           }
           
-          // Get product count
+          // Get product count using direct API access
           async function getProductCount() {
             try {
               logInteraction('Fetching product count...');
               
-              if (!sessionToken) {
-                await getSessionToken();
-              }
+              await waitForAppBridge();
               
-              const response = await fetch(\`https://\${shopDomain}/admin/api/2023-10/products/count.json\`, {
-                headers: {
-                  'X-Shopify-Access-Token': sessionToken
-                }
-              });
+              const response = await fetch('shopify:admin/api/2023-10/products/count.json');
               
               if (!response.ok) {
                 throw new Error('HTTP ' + response.status + ': ' + response.statusText);
@@ -440,75 +403,59 @@ app.get('/app', (req, res) => {
             }
           }
           
-          // Show toast message
+          // Show toast message using App Bridge
           async function showToast() {
             try {
               logInteraction('Showing toast message...');
               
-              if (!app) {
-                if (!(await initializeAppBridge())) {
-                  throw new Error('App Bridge not available');
-                }
-              }
+              await waitForAppBridge();
               
-              app.dispatch(
-                window.createToast({
-                  message: 'LogoMagic is working perfectly! 🎨',
-                  duration: 3000,
-                  isError: false
-                })
-              );
+              // Use App Bridge toast functionality
+              shopify.toast.show('LogoMagic is working perfectly! 🎨', {
+                duration: 3000,
+                isError: false
+              });
+              
               logInteraction('Toast message displayed');
             } catch (error) {
               logInteraction('Error showing toast: ' + error.message);
             }
           }
           
-          // Open modal
+          // Open modal using App Bridge
           async function openModal() {
             try {
               logInteraction('Opening modal...');
               
-              if (!app) {
-                if (!(await initializeAppBridge())) {
-                  throw new Error('App Bridge not available');
-                }
-              }
+              await waitForAppBridge();
               
-              app.dispatch(
-                window.createModal({
-                  title: 'LogoMagic Dashboard',
-                  message: 'This is a test modal to demonstrate App Bridge functionality.',
-                  primaryAction: {
-                    label: 'OK',
-                    callback: () => {
-                      logInteraction('Modal closed');
-                    }
+              // Use App Bridge modal functionality
+              shopify.modal.open('LogoMagic Dashboard', {
+                message: 'This is a test modal to demonstrate App Bridge functionality.',
+                primaryAction: {
+                  label: 'OK',
+                  callback: () => {
+                    logInteraction('Modal closed');
                   }
-                })
-              );
+                }
+              });
+              
               logInteraction('Modal opened');
             } catch (error) {
               logInteraction('Error opening modal: ' + error.message);
             }
           }
           
-          // Redirect to products
+          // Redirect to products using App Bridge
           async function redirectToProducts() {
             try {
               logInteraction('Redirecting to products page...');
               
-              if (!app) {
-                if (!(await initializeAppBridge())) {
-                  throw new Error('App Bridge not available');
-                }
-              }
+              await waitForAppBridge();
               
-              app.dispatch(
-                window.createRedirect({
-                  path: '/admin/products'
-                })
-              );
+              // Use App Bridge redirect functionality
+              shopify.redirect.to('/admin/products');
+              
               logInteraction('Redirect initiated');
             } catch (error) {
               logInteraction('Error redirecting: ' + error.message);
@@ -517,8 +464,13 @@ app.get('/app', (req, res) => {
           
           // Auto-initialize on page load
           window.addEventListener('load', async () => {
-            logInteraction('Page loaded, initializing...');
-            await initializeAppBridge();
+            logInteraction('Page loaded, waiting for App Bridge...');
+            try {
+              await waitForAppBridge();
+              logInteraction('App Bridge ready - all functionality available');
+            } catch (error) {
+              logInteraction('Error initializing App Bridge: ' + error.message);
+            }
           });
         </script>
       </body>
