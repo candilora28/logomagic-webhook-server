@@ -1,13 +1,13 @@
-const express = require('express');
-const crypto = require('crypto');
-const axios = require('axios');
+import express from 'express';
+import crypto from 'crypto';
+import axios from 'axios';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Your Shopify app credentials (replace with your actual values)
-const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY || 'your_api_key_here';
-const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || 'your_api_secret_here';
+const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY || '46a098cacef9f497221a7639f3b822a3';
+const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '532d094804b1c97e2d13ac73d40eb9a4';
 
 // Middleware
 app.use(express.json());
